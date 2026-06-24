@@ -1,21 +1,20 @@
 name: Generate deterministic npm lockfile
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
+      - security/deterministic-npm-dependencies
 
 permissions:
   contents: read
 
 jobs:
   lockfile-and-build:
-    if: github.head_ref == 'security/deterministic-npm-dependencies'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
-      - name: Checkout pull request head
+      - name: Checkout branch
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
       - name: Set up Node.js
