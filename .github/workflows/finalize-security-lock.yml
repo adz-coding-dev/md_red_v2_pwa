@@ -1,0 +1,68 @@
+name: Finalize validated security lock
+
+on:
+  push:
+    branches:
+      - security/deterministic-npm-dependencies
+    paths:
+      - .github/workflows/finalize-security-lock.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout hardening branch
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+
+      - name: Pin browser import map
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path("index.html")
+          text = path.read_text(encoding="utf-8")
+          replacements = {
+              "marked@^17.0.1": "marked@17.0.1",
+              "react@^19.2.4": "react@19.2.4",
+              "react-dom@^19.2.4": "react-dom@19.2.4",
+              "lucide-react@^0.563.0": "lucide-react@0.563.0",
+              "dompurify@^3.3.1": "dompurify@3.4.11",
+              "vite@^7.3.1": "vite@7.3.5",
+              "@vitejs/plugin-react@^5.1.4": "@vitejs/plugin-react@5.1.4",
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f"expected import not found: {old}")
+              text = text.replace(old, new)
+          path.write_text(text, encoding="utf-8")
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22
+
+      - name: Refresh lockfile without lifecycle scripts
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Validate deterministic install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Reject high-severity advisories
+        run: npm audit --audit-level=high
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit validated files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html package-lock.json
+          git commit -m "fix(deps): finalize validated dependency pins"
+          git push
